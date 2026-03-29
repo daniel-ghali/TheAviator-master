@@ -6,6 +6,12 @@ let handLandmarker;
 let lastVideoTime = -1;
 let isTracking = false;
 
+let targetX = 0;
+let targetY = 0;
+let smoothX = 0;
+let smoothY = 0;
+let hasHand = false;
+
 async function createHandLandmarker() {
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
@@ -23,11 +29,21 @@ async function createHandLandmarker() {
   });
 }
 
-// Expose to global scope for the start menu button
 window.initHandTracking = async function() {
   await createHandLandmarker();
   startCamera();
+  requestAnimationFrame(smoothTracking);
 };
+
+function smoothTracking() {
+  if (hasHand && typeof window.mousePos !== 'undefined') {
+    // 60fps interpolation to remove webcam 30fps stutter
+    smoothX += (targetX - smoothX) * 0.3;
+    smoothY += (targetY - smoothY) * 0.3;
+    window.mousePos = { x: smoothX, y: smoothY };
+  }
+  requestAnimationFrame(smoothTracking);
+}
 
 async function startCamera() {
   try {
@@ -64,10 +80,9 @@ async function predictWebcam() {
       let tx = -((palm.x - 0.5) * 3); 
       let ty = -((palm.y - 0.5) * 3);
       
-      tx = Math.max(-1, Math.min(1, tx));
-      ty = Math.max(-1, Math.min(1, ty));
-      
-      window.mousePos = { x: tx, y: ty };
+      targetX = Math.max(-1, Math.min(1, tx));
+      targetY = Math.max(-1, Math.min(1, ty));
+      hasHand = true;
     }
   }
   
