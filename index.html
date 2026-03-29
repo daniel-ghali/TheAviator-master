@@ -1,0 +1,155 @@
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>The Aviator: The Game | Codrops</title>
+	<meta name="description"
+		content="Demo of the game: The Making of 'The Aviator': Animating a Basic 3D Scene with Three.js" />
+	<meta name="keywords"
+		content="three.js, webgl, tutorial, game, 3d, animation, airplane, web development, javascript" />
+	<meta name="author" content="Karim Maaloul for Codrops" />
+	<link rel="shortcut icon" href="favicon.ico">
+	<link href='https://fonts.googleapis.com/css?family=Playfair+Display:400,700,700italic' rel='stylesheet'
+		type='text/css'>
+	<link rel="stylesheet" type="text/css" href="css/demo.css" />
+	<link rel="stylesheet" type="text/css" href="css/game.css" />
+	<script type="text/javascript" src="js/TweenMax.min.js"></script>
+	<script type="text/javascript" src="js/three.min.js"></script>
+	<script type="text/javascript" src="js/game.js"></script>
+	<script type="module" src="js/handControl.js"></script>
+	<!--[if IE]>
+		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+		<![endif]-->
+	<style>
+		.overlay {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: rgba(0, 0, 0, 0.8);
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			z-index: 200;
+			color: white;
+			font-family: 'Playfair Display', serif;
+		}
+
+		.overlay h1 {
+			font-size: 4em;
+			margin-bottom: 20px;
+			color: #d1b790;
+		}
+
+		.overlay p {
+			font-size: 1.5em;
+			margin-bottom: 30px;
+		}
+
+		.btn {
+			padding: 15px 30px;
+			font-size: 1.2em;
+			cursor: pointer;
+			margin: 10px;
+			background: #d6ec7267;
+			color: white;
+			border: none;
+			border-radius: 5px;
+			text-transform: uppercase;
+			font-weight: bold;
+			font-family: sans-serif;
+			transition: background 0.2s;
+		}
+
+		.btn:hover {
+			background: #d6ec7267;
+		}
+
+		.signature-box {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		#signaturePad {
+			background: white;
+			border-radius: 5px;
+			cursor: crosshair;
+			touch-action: none;
+		}
+
+		.input-name {
+			padding: 10px;
+			font-size: 1.2em;
+			text-align: center;
+			margin-bottom: 10px;
+			border-radius: 5px;
+			border: none;
+			font-family: sans-serif;
+		}
+	</style>
+</head>
+
+<body>
+
+	<div id="startMenu" class="overlay">
+		<h1>The Aviator</h1>
+		<p>Select your control method:</p>
+		<div>
+			<button class="btn" onclick="startGame('mouse')">Play with Mouse</button>
+			<button class="btn" onclick="startGame('hand')">Play with Hand Tracking</button>
+		</div>
+	</div>
+
+	<div id="gameOverScreen" class="overlay" style="display: none;">
+		<h1>GAME OVER</h1>
+		<p id="finalScoreDisplay" style="font-size: 2em; margin-bottom: 20px;">Distance: 000 | Level: 1</p>
+		<div class="signature-box" style="width: 90vw; height: 60vh;">
+			<input type="text" id="playerName" class="input-name" placeholder="Enter Your Name" style="font-family: 'Playfair Display', serif; font-size: 1.5em; width: 60%; background: #f7d9aa; color: #59332e;">
+			<p style="font-size: 1.2em; margin: 10px 0; font-family: 'Playfair Display', serif; color: #d1b790;">Sign your name below</p>
+			<canvas id="signaturePad" width="1200" height="600" style="width: 100%; height: 100%; min-height: 200px; background: white; border-radius: 5px; cursor: crosshair; touch-action: none; border: 4px solid #d1b790;"></canvas>
+			<button class="btn" id="submitBtn" onclick="submitScore()" style="margin-top: 15px; font-size: 1.2em; width: 40%;">Submit Score</button>
+		</div>
+	</div>
+
+	<video id="webcam" autoplay playsinline
+		style="position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px; transform: scaleX(-1); border-radius: 10px; border: 2px solid white; display: none; z-index: 999;"></video>
+	<div class="game-holder" id="gameHolder">
+		<div class="header">
+			<h1><span>the</span>Aviator</h1>
+			<h2>fly it to the end</h2>
+			<div class="score" id="score">
+				<div class="score__content" id="level">
+					<div class="score__label">level</div>
+					<div class="score__value score__value--level" id="levelValue">1</div>
+					<svg class="level-circle" id="levelCircle" viewbox="0 0 200 200">
+						<circle id="levelCircleBgr" r="80" cx="100" cy="100" fill="none" stroke="#d1b790"
+							stroke-width="24px" />
+						<circle id="levelCircleStroke" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0"
+							stroke-width="14px" stroke-dasharray="502" />
+					</svg>
+				</div>
+				<div class="score__content" id="dist">
+					<div class="score__label">distance</div>
+					<div class="score__value score__value--dist" id="distValue">000</div>
+				</div>
+				<div class="score__content" id="energy">
+					<div class="score__label">energy</div>
+					<div class="score__value score__value--energy" id="energyValue">
+						<div class="energy-bar" id="energyBar"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="world" id="world"></div>
+		<div class="message message--replay" id="replayMessage">Click to Replay</div>
+		<div class="message message--instructions" id="instructions">Grab the blue pills<span>avoid the red ones</span>
+		</div>
+	</div>
+</body>
+
+</html>
