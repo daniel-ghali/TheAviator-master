@@ -24,9 +24,9 @@ var particlesInUse = [];
 function resetGame() {
   game = {
     speed: 0,
-    initSpeed: .00035,
-    baseSpeed: .00035,
-    targetBaseSpeed: .00035,
+    initSpeed: .000365,
+    baseSpeed: .000365,
+    targetBaseSpeed: .000365,
     incrementSpeedByTime: .0000025,
     incrementSpeedByLevel: .000005,
     distanceForSpeedUpdate: 100,
@@ -188,65 +188,7 @@ window.startGame = function (type) {
   game.status = "playing";
 };
 
-window.showGameOverScreen = function () {
-  document.getElementById("gameOverScreen").style.display = "flex";
-  document.getElementById("finalScoreDisplay").innerText = "Distance: " + Math.floor(game.distance) + " | Level: " + game.level;
-
-  // Clear the signature pad for new drawing
-  var canvas = document.getElementById("signaturePad");
-  var ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Attach pointer events for native Mouse / Touch drawing
-  if (!canvas.initializedPtrEvents) {
-    var ptrDrawing = false;
-    canvas.addEventListener("pointerdown", function (e) {
-      ptrDrawing = true;
-      var rect = canvas.getBoundingClientRect();
-      ctx.beginPath();
-      ctx.moveTo((e.clientX - rect.left) * (canvas.width / rect.width), (e.clientY - rect.top) * (canvas.height / rect.height));
-    });
-    canvas.addEventListener("pointermove", function (e) {
-      if (ptrDrawing) {
-        var rect = canvas.getBoundingClientRect();
-        ctx.lineTo((e.clientX - rect.left) * (canvas.width / rect.width), (e.clientY - rect.top) * (canvas.height / rect.height));
-        ctx.strokeStyle = "red"; ctx.lineWidth = 4; ctx.lineCap = "round";
-        ctx.stroke();
-      }
-    });
-    canvas.addEventListener("pointerup", function () { ptrDrawing = false; });
-    canvas.addEventListener("pointercancel", function () { ptrDrawing = false; });
-    canvas.addEventListener("pointerout", function () { ptrDrawing = false; });
-    canvas.initializedPtrEvents = true;
-  }
-};
-
-window.submitScore = function () {
-  var name = document.getElementById("playerName").value;
-  if (!name) {
-    alert("Please enter your name!");
-    return;
-  }
-
-  // Download the signature canvas as a PNG image
-  var canvas = document.getElementById("signaturePad");
-  var dataURL = canvas.toDataURL("image/png");
-  var link = document.createElement("a");
-  link.download = name + ".png";
-  link.href = dataURL;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  document.getElementById("gameOverScreen").style.display = "none";
-  document.getElementById("startMenu").style.display = "flex";
-  game.status = "waitingStart";
-
-  // Force reset plane vertical position to prevent immediate game over loops
-  airplane.mesh.position.y = game.planeDefaultHeight;
-};
-
-// LIGHTS
+// Lights
 
 var ambientLight, hemisphereLight, shadowLight;
 
@@ -640,7 +582,8 @@ EnnemiesHolder = function () {
 }
 
 EnnemiesHolder.prototype.spawnEnnemies = function () {
-  var nEnnemies = game.level;
+  // Level 1 difficulty behaves like Level 3 (starts with 3 enemies instead of 1)
+  var nEnnemies = game.level + 2;
 
   for (var i = 0; i < nEnnemies; i++) {
     var ennemy;
