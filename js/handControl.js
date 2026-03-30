@@ -29,7 +29,7 @@ async function createHandLandmarker() {
   });
 }
 
-window.initHandTracking = async function() {
+window.initHandTracking = async function () {
   await createHandLandmarker();
   startCamera();
   requestAnimationFrame(smoothTracking);
@@ -51,7 +51,7 @@ async function startCamera() {
       video: { width: 640, height: 480 } // Fixed resolution to provide IMAGE_DIMENSIONS implicitly
     });
     video.srcObject = stream;
-    
+
     video.addEventListener("loadedmetadata", () => {
       // Vital for MediaPipe Tasks Vision: explicit dimensions
       video.width = video.videoWidth;
@@ -68,23 +68,50 @@ async function startCamera() {
 
 async function predictWebcam() {
   if (!isTracking) return;
-  
+
   if (handLandmarker && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
-    
+
     const results = handLandmarker.detectForVideo(video, performance.now());
     if (results.landmarks && results.landmarks.length > 0) {
-      const palm = results.landmarks[0][9];
-      
+      const landmarks = results.landmarks[0];
+      const palm = landmarks[9];
+      const thumbTip = landmarks[4];
+      const indexTip = landmarks[8];
+
+      // Pinch detection (distance between thumb and index tip)
+      const distance = Math.sqrt(
+        Math.pow(thumbTip.x - indexTip.x, 2) +
+        Math.pow(thumbTip.y - indexTip.y, 2) +
+        Math.pow(thumbTip.z - indexTip.z, 2)
+      );
+
       // Map Mediapipe (0..1) to Game mousePos (-1..1) based on Palm
-      let tx = -((palm.x - 0.5) * 3); 
+      let tx = -((palm.x - 0.5) * 3);
       let ty = -((palm.y - 0.5) * 3);
-      
+
       targetX = Math.max(-1, Math.min(1, tx));
       targetY = Math.max(-1, Math.min(1, ty));
       hasHand = true;
+
+      // Expose gesture data for Signature Pad
+      window.handGesture = {
+        x: 1 - indexTip.x, // Mirror X for intuitive signing
+        y: indexTip.y,
+        isPinching: distance < 0.08 // Adjusted threshold for pinch
+      };
+
+      if (!window.isHandTrackingReady) {
+        window.isHandTrackingReady = true;
+        const msg = document.getElementById("handStatusMsg");
+        const btn = document.getElementById("startHandBtn");
+        if (msg) msg.innerText = "Hand detected! Prepare for takeoff.";
+        if (btn) btn.style.display = "block";
+      }
+    } else {
+      window.handGesture = { isPinching: false };
     }
   }
-  
+
   requestAnimationFrame(predictWebcam);
 }

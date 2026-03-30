@@ -10,6 +10,59 @@ var Colors = {
 
 };
 
+// SOUNDS
+var SoundManager = (function() {
+  var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var sounds = {};
+  var engineOsc = null;
+  var engineGain = null;
+
+  function loadSound(name, url) {
+    var audio = new Audio(url);
+    audio.crossOrigin = "anonymous";
+    sounds[name] = audio;
+  }
+
+  // Preload UI/Game sounds
+  loadSound('coin', 'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3');
+  loadSound('crash', 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
+  loadSound('rockHit', 'https://assets.mixkit.co/active_storage/sfx/2043/2043-preview.mp3');
+  loadSound('levelup', 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
+
+  return {
+    play: function(name, volume = 1) {
+      if (sounds[name]) {
+        var s = sounds[name].cloneNode();
+        s.volume = volume;
+        s.play().catch(e => console.log("Audio blocked by browser policy until interaction."));
+      }
+    },
+    startEngine: function() {
+      if (engineOsc) return;
+      engineOsc = audioCtx.createOscillator();
+      engineGain = audioCtx.createGain();
+      engineOsc.type = 'sawtooth';
+      engineOsc.frequency.setValueAtTime(100, audioCtx.currentTime);
+      engineGain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+      engineOsc.connect(engineGain);
+      engineGain.connect(audioCtx.destination);
+      engineOsc.start();
+    },
+    updateEngine: function(speed) {
+      if (engineOsc) {
+        var freq = 50 + (speed * 100000);
+        engineOsc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1);
+      }
+    },
+    stopEngine: function() {
+       if (engineGain) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5);
+       setTimeout(() => {
+         if (engineOsc) { engineOsc.stop(); engineOsc = null; }
+       }, 500);
+    }
+  };
+})();
+
 ///////////////
 
 // GAME VARIABLES
@@ -96,8 +149,8 @@ var scene,
 
 //SCREEN & MOUSE VARIABLES
 
-var HEIGHT, WIDTH,
-  mousePos = { x: 0, y: 0 };
+var HEIGHT, WIDTH;
+window.mousePos = { x: 0, y: 0 };
 
 //INIT THREE JS, SCREEN AND MOUSE EVENTS
 
@@ -160,32 +213,51 @@ function handleMenuClick(event) {
 function handleMouseMove(event) {
   var tx = -1 + (event.clientX / WIDTH) * 2;
   var ty = 1 - (event.clientY / HEIGHT) * 2;
-  mousePos = { x: tx, y: ty };
+  window.mousePos = { x: tx, y: ty };
 }
 
 function handleTouchMove(event) {
   event.preventDefault();
   var tx = -1 + (event.touches[0].pageX / WIDTH) * 2;
   var ty = 1 - (event.touches[0].pageY / HEIGHT) * 2;
-  mousePos = { x: tx, y: ty };
+  window.mousePos = { x: tx, y: ty };
 }
 
 window.startGame = function (type) {
-  document.getElementById("startMenu").style.display = "none";
-  document.getElementById("gameOverScreen").style.display = "none";
+  // Prevent starting if a game is active or waiting for submission
+  if (game.status === "gameover" || game.status === "waitingReplay") return;
 
   if (type === "mouse") {
+    document.getElementById("startMenu").style.display = "none";
+    document.getElementById("gameOverScreen").style.display = "none";
     document.addEventListener('mousemove', handleMouseMove, false);
     document.addEventListener('touchmove', handleTouchMove, false);
+    resetGame();
+    game.status = "playing";
+    SoundManager.startEngine();
   } else if (type === "hand") {
+    // Show loading state
+    document.getElementById("initialMenu").style.display = "none";
+    document.getElementById("handLoadingMenu").style.display = "flex";
+    
     document.removeEventListener('mousemove', handleMouseMove, false);
+    document.removeEventListener('touchmove', handleTouchMove, false);
     if (window.initHandTracking) {
       window.initHandTracking();
     }
+    // Game doesn't start yet - waits for confirmHandStart()
   }
+};
 
+window.confirmHandStart = function() {
+  if (!window.isHandTrackingReady) return;
+  
+  document.getElementById("startMenu").style.display = "none";
+  document.getElementById("gameOverScreen").style.display = "none";
+  
   resetGame();
   game.status = "playing";
+  SoundManager.startEngine();
 };
 
 // Lights
@@ -391,12 +463,14 @@ var AirPlane = function () {
   var matBlade = new THREE.MeshPhongMaterial({ color: Colors.brownDark, shading: THREE.FlatShading });
   var blade1 = new THREE.Mesh(geomBlade, matBlade);
   blade1.position.set(8, 0, 0);
-
   blade1.castShadow = true;
   blade1.receiveShadow = true;
 
+  var blade2 = blade1.clone();
+  blade2.rotation.x = Math.PI / 2;
+
   this.propeller.add(blade1);
-  // Removed second blade to reduce the number of fans
+  this.propeller.add(blade2);
   this.propeller.position.set(60, 0, 0);
   this.mesh.add(this.propeller);
 
@@ -629,6 +703,8 @@ EnnemiesHolder.prototype.rotateEnnemies = function () {
 
       game.energy = 0;
       game.status = "gameover";
+      SoundManager.play('rockHit');
+      SoundManager.stopEngine();
       if (window.showGameOverScreen) window.showGameOverScreen();
       // removeEnergy();
       i--;
@@ -722,7 +798,7 @@ CoinsHolder = function (nCoins) {
 
 CoinsHolder.prototype.spawnCoins = function () {
 
-  var nCoins = 1 + Math.floor(Math.random() * 10);
+  var nCoins = 10 + Math.floor(Math.random() * 20);
   var d = game.seaRadius + game.planeDefaultHeight + (-1 + Math.random() * 2) * (game.planeAmpHeight - 20);
   var amplitude = 10 + Math.round(Math.random() * 10);
   for (var i = 0; i < nCoins; i++) {
@@ -760,6 +836,7 @@ CoinsHolder.prototype.rotateCoins = function () {
       this.mesh.remove(coin.mesh);
       particlesHolder.spawnParticles(coin.mesh.position.clone(), 5, 0x009999, .8);
       addEnergy();
+      SoundManager.play('coin', 0.5);
       i--;
     } else if (coin.angle > Math.PI) {
       this.coinsPool.unshift(this.coinsInUse.splice(i, 1)[0]);
@@ -846,11 +923,13 @@ function loop() {
     }
 
     if (Math.floor(game.distance) % game.distanceForLevelUpdate == 0 && Math.floor(game.distance) > game.levelLastUpdate) {
-      game.levelLastUpdate = Math.floor(game.distance);
-      game.level++;
+      game.level = Math.floor(game.distance / game.distanceForLevelUpdate) + 1;
       fieldLevel.innerHTML = Math.floor(game.level);
 
-      game.targetBaseSpeed = game.initSpeed + game.incrementSpeedByLevel * game.level
+      // Ensure Level 2 and above are always faster than Level 1 accumulation
+      var levelBonus = (game.level - 1) * game.incrementSpeedByLevel;
+      game.targetBaseSpeed = Math.max(game.targetBaseSpeed, game.initSpeed + levelBonus);
+      SoundManager.play('levelup');
     }
 
 
@@ -866,9 +945,10 @@ function loop() {
     airplane.mesh.rotation.x += 0.0003 * deltaTime;
     game.planeFallSpeed *= 1.05;
     airplane.mesh.position.y -= game.planeFallSpeed * deltaTime;
+    SoundManager.stopEngine();
 
     if (airplane.mesh.position.y < -200) {
-      showReplay();
+      if (window.showGameOverScreen) window.showGameOverScreen();
       game.status = "waitingReplay";
 
     }
@@ -891,6 +971,7 @@ function loop() {
   sea.moveWaves();
 
   renderer.render(scene, camera);
+  SoundManager.updateEngine(game.speed);
   requestAnimationFrame(loop);
 }
 
@@ -918,6 +999,8 @@ function updateEnergy() {
 
   if (game.energy < 1) {
     game.status = "gameover";
+    SoundManager.stopEngine();
+    if (window.showGameOverScreen) window.showGameOverScreen();
   }
 }
 
@@ -935,9 +1018,9 @@ function removeEnergy() {
 
 function updatePlane() {
 
-  game.planeSpeed = normalize(mousePos.x, -.5, .5, game.planeMinSpeed, game.planeMaxSpeed);
-  var targetY = normalize(mousePos.y, -.75, .75, game.planeDefaultHeight - game.planeAmpHeight, game.planeDefaultHeight + game.planeAmpHeight);
-  var targetX = normalize(mousePos.x, -1, 1, -game.planeAmpWidth * .7, -game.planeAmpWidth);
+  game.planeSpeed = normalize(window.mousePos.x, -.5, .5, game.planeMinSpeed, game.planeMaxSpeed);
+  var targetY = normalize(window.mousePos.y, -.75, .75, game.planeDefaultHeight - game.planeAmpHeight, game.planeDefaultHeight + game.planeAmpHeight);
+  var targetX = normalize(window.mousePos.x, -1, 1, -game.planeAmpWidth * .7, -game.planeAmpWidth);
 
   game.planeCollisionDisplacementX += game.planeCollisionSpeedX;
   targetX += game.planeCollisionDisplacementX;
